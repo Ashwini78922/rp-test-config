@@ -1,0 +1,103 @@
+package com.scb.channels.research.error;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import javax.ws.rs.BadRequestException;
+import javax.ws.rs.NotFoundException;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.lang.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.UndeclaredThrowableException;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.class)
+public class RpExceptionMapperTest {
+
+    private static final String TEST_EXCEPTION_MESSAGE = "Exception";
+
+    private static String JSON_MARSHAL_FAILED = "Server error mapping application error";
+
+
+    @Mock
+    private ObjectMapper objectMapper;
+    private RpExceptionMapper rpExceptionMapper;
+
+    @Before
+    public void setup() {
+        rpExceptionMapper = new RpExceptionMapper(true);
+        rpExceptionMapper.setObjectMapper(objectMapper);
+    }
+
+    @Test
+    public void shouldReturnErrorCodeFromCustomException() throws Exception {
+        Response response = rpExceptionMapper.toResponse(new RpBadRequestException(TEST_EXCEPTION_MESSAGE, RpError.BAD_REQUEST));
+        assertThat(response.getStatus()).isEqualTo(RpError.BAD_REQUEST.code());
+        validateErrorBuilding(response, TEST_EXCEPTION_MESSAGE, RpError.BAD_REQUEST.code());
+    }
+
+    @Test
+    public void shouldReturnErrorCodeFromWebApplicationExceptions() throws Exception {
+        Response response = rpExceptionMapper.toResponse(new NotFoundException(TEST_EXCEPTION_MESSAGE));
+        assertThat(response.getStatus()).isEqualTo(RpError.NOT_FOUND.code());
+        validateErrorBuilding(response, TEST_EXCEPTION_MESSAGE, RpError.NOT_FOUND.code());
+    }
+
+    @Test
+    public void shouldReturnErrorCodeFromOtherException() throws Exception {
+        Response response = rpExceptionMapper.toResponse(new RuntimeException(TEST_EXCEPTION_MESSAGE));
+        assertThat(response.getStatus()).isEqualTo(RpError.INTERNAL_ERROR.code());
+        validateErrorBuilding(response, TEST_EXCEPTION_MESSAGE, RpError.INTERNAL_ERROR.code());
+    }
+
+    @Test
+    public void fallbackExceptionFromAppExceptionObjMapperToPlainTextError() throws Exception {
+        Exception exception = new RuntimeException(JSON_MARSHAL_FAILED);
+        doThrow(new RuntimeException(exception)).when(objectMapper).writeValueAsString(any());
+        Response response = rpExceptionMapper.toResponse(new RuntimeException(TEST_EXCEPTION_MESSAGE));
+        assertThat(response.getStatus()).isEqualTo(RpError.INTERNAL_ERROR.code());
+        assertThat(response.getEntity()).asString().isEqualTo(String.format("Unexpected server error mapping response [java.lang.RuntimeException: %s]. Root error was [%s].",
+                exception.toString(), TEST_EXCEPTION_MESSAGE));
+    }
+
+    @Test
+    public void fallbackExceptionFromWrapperThrowableToNonWrapperCause() throws Exception {
+        Response response = rpExceptionMapper.toResponse(new UndeclaredThrowableException(new InvocationTargetException(new BadRequestException(TEST_EXCEPTION_MESSAGE))));
+        assertThat(response.getStatus()).isEqualTo(RpError.BAD_REQUEST.code());
+        validateErrorBuilding(response, TEST_EXCEPTION_MESSAGE, RpError.BAD_REQUEST.code());
+    }
+
+    @Test
+    public void testDebugInfoIfDisabled() throws Exception {
+        rpExceptionMapper = new RpExceptionMapper(false);
+        rpExceptionMapper.setObjectMapper(objectMapper);
+
+        Response response = rpExceptionMapper.toResponse(new UndeclaredThrowableException(new InvocationTargetException(new BadRequestException(TEST_EXCEPTION_MESSAGE))));
+        assertThat(response.getStatus()).isEqualTo(RpError.BAD_REQUEST.code());
+        Error error = validateErrorBuilding(response, TEST_EXCEPTION_MESSAGE, RpError.BAD_REQUEST.code());
+
+        assertThat(error.getDebugMessage()).isNull();
+
+    }
+
+    private Error validateErrorBuilding(Response response, String expectedMessage, int expectedCode) throws JsonProcessingException {
+        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
+        ArgumentCaptor<Error> errorCaptor = ArgumentCaptor.forClass(Error.class);
+        verify(objectMapper).writeValueAsString(errorCaptor.capture());
+
+        Error error = errorCaptor.getValue();
+        assertThat(error.getMessage()).isEqualTo(expectedMessage);
+        assertThat(error.getCode()).isEqualTo(expectedCode);
+        return error;
+    }
+
+}
