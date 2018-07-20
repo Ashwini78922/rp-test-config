@@ -1,0 +1,52 @@
+package com.scb.channels.research.repository;
+
+import com.datastax.driver.core.Row;
+import com.scb.channels.persistence.Loadable;
+import com.scb.channels.persistence.PersistenceService;
+import com.scb.channels.research.resource.model.NotificationInfo;
+import com.scb.channels.research.utils.PersistenceMatchers;
+import com.scb.channels.research.utils.TestData;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import java.util.List;
+
+import static org.assertj.core.api.Java6Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.Silent.class)
+public class NotificationRepositoryImplTest{
+
+    @InjectMocks
+    private NotificationRepositoryImpl notificationRepository;
+
+    @Mock
+    private PersistenceService persistenceService;
+
+    @Mock
+    protected Row mockRow;
+
+    private static final NotificationInfo mockNotificationInfo = TestData.getNotificationInfo();
+
+    @Test
+    public void shouldReturnNotificationByReportId() {
+        when(persistenceService.retrieve(argThat(PersistenceMatchers.loadsFrom(NotificationRepositoryImpl.TABLE_RP_NOTIFICATIONS_BY_REPORT_ID)))).thenReturn(mockNotificationInfo);
+        NotificationInfo notificationInfo= notificationRepository.loadNotificationByReportId("112233");
+        ArgumentCaptor<Loadable> captor = ArgumentCaptor.forClass(Loadable.class);
+        verify(persistenceService, times(1)).retrieve(captor.capture());
+        List<Loadable> loadables = captor.getAllValues();
+        assertThat(loadables).hasSize(1);
+        mockCompulsoryValues(mockRow);
+        assertThat(notificationInfo).isEqualTo(mockNotificationInfo);
+    }
+
+    private void mockCompulsoryValues(Row mockRow){
+        when(mockRow.getString("reportId")).thenReturn(mockNotificationInfo.getReportId());
+    }
+
+}
