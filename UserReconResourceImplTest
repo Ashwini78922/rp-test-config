@@ -1,0 +1,61 @@
+package com.scb.channels.research.resource;
+
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.google.common.collect.ImmutableList;
+import com.scb.channels.foundation.api.dto.recon.ReconHeaderRequest;
+import com.scb.channels.foundation.api.dto.recon.ReconHeaderResponse;
+import com.scb.channels.foundation.api.dto.recon.ReconHeaders;
+import com.scb.channels.foundation.util.jackson.JacksonMarshaller;
+import com.scb.channels.foundation.util.jackson.Marshaller;
+import com.scb.channels.research.user.service.UserService;
+import com.scb.channels.research.utils.TestData;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import java.time.Instant;
+
+import static org.assertj.core.api.Java6Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.when;
+
+@RunWith(MockitoJUnitRunner.class)
+public class UserReconResourceImplTest {
+
+    @InjectMocks
+    private UserReconResourceImpl userReconResource;
+
+    @Mock
+    private Marshaller marshaller;
+
+    @Mock
+    private UserService userService;
+
+    @Test
+    public void should_return_userrecon_headers_for_update() throws JsonProcessingException {
+        Marshaller jacksonMarshaller = new JacksonMarshaller();
+        ReconHeaders reconHeader = ReconHeaders.builder()
+                .applicationId("rp")
+                .entityType("UserProfile")
+                .identifiers(ImmutableList.of("1"))
+                .timestamp(Instant.now().getEpochSecond())
+                .build();
+        ReconHeaderRequest reconHeaderRequest = new ReconHeaderRequest(ImmutableList.of(reconHeader));
+        when(marshaller.unmarshalLenient(any(), any())).thenReturn(reconHeaderRequest);
+        when(userService.loadUsersById(any())).thenReturn(ImmutableList.of(TestData.buildUser("1", Instant.now().minusSeconds(10))));
+        ReconHeaderResponse reconHeaderResponse = userReconResource.resolveReconHeadersForUser(jacksonMarshaller.marshalLenient(reconHeaderRequest));
+        assertThat(reconHeaderResponse.getHdrsToUpdate()).hasSize(1);
+        assertThat(reconHeaderResponse.getHdrsToDeactivate()).hasSize(0);
+        assertThat(reconHeaderResponse.getHdrsToUpdate().get(0).getIdentifiers().get(0)).isEqualTo("1");
+
+        when(userService.loadUsersById(any())).thenReturn(ImmutableList.of(TestData.buildUser("1", Instant.now().plusSeconds(10))));
+        reconHeaderResponse = userReconResource.resolveReconHeadersForUser(jacksonMarshaller.marshalLenient(reconHeaderRequest));
+        assertThat(reconHeaderResponse.getHdrsToUpdate()).hasSize(0);
+        assertThat(reconHeaderResponse.getHdrsToDeactivate()).hasSize(0);
+    }
+
+
+}
