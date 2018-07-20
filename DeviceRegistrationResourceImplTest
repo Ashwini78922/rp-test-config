@@ -1,0 +1,211 @@
+package com.scb.channels.research.resource;
+
+import com.scb.channels.foundation.util.jackson.Marshaller;
+import com.scb.channels.research.model.DeviceRegistrationInfo;
+import com.scb.channels.research.model.TokenRequest;
+import com.scb.channels.research.model.User;
+import com.scb.channels.research.model.clientform.ClientSignUpForm;
+import com.scb.channels.research.model.clientform.ClientSignUpResponse;
+import com.scb.channels.research.service.PreConsentServiceImpl;
+import com.scb.channels.research.user.outbound.service.DeviceRegistrationMsgProvider;
+import com.scb.channels.research.user.service.UserService;
+import com.scb.channels.research.utils.RpApiConstants;
+import com.scb.channels.research.utils.TestData;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import javax.ws.rs.BadRequestException;
+import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.class)
+public class DeviceRegistrationResourceImplTest {
+
+    @InjectMocks
+    DeviceRegistrationResourceImpl deviceRegistrationResource;
+
+    @Mock
+    private Marshaller marshaller;
+
+    @Mock
+    private DeviceRegistrationMsgProvider userMessageService;
+
+    @Mock
+    private UserService userService;
+
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
+
+    private DeviceRegistrationInfo activationRequest;
+    private DeviceRegistrationInfo deviceToken;
+    private DeviceRegistrationInfo passwordResetRequest;
+    private DeviceRegistrationInfo deviceTokenUnRegUserRequest;
+    private DeviceRegistrationInfo passwordResetUnRegUserRequest;
+    private User user;
+    private TokenRequest tokenRequest;
+    private ClientSignUpForm clientSignUpForm;
+    private ClientSignUpResponse clientSignUpResponse;
+    private DeviceRegistrationInfo passwordResetUnRegUserRequestWithTabInEmail;
+
+    @Mock
+    private PreConsentServiceImpl preConsentService;
+
+    @Before
+    public void setUp() {
+        activationRequest = TestData.activationRequest();
+        deviceToken = TestData.deviceToken();
+        passwordResetRequest = TestData.passwordResetRequest();
+        deviceTokenUnRegUserRequest = TestData.deviceTokenUnRegUserRequest();
+        passwordResetUnRegUserRequest = TestData.passwordResetUnRegUserRequest();
+        tokenRequest = TestData.tokenRequest();
+        user = User.builder().userId("12345").email("abc@gmail.com").build();
+        clientSignUpForm = TestData.clientSignUpForm();
+        clientSignUpResponse = TestData.clientSignUpResponse();
+        passwordResetUnRegUserRequestWithTabInEmail = TestData.passwordResetUnRegUserRequestWithTabInEmail();
+    }
+
+    @Test
+    public void shouldSendActivationMail() {
+        String body = "activate";
+        when(marshaller.unmarshalLenient(body, DeviceRegistrationInfo.class)).thenReturn(activationRequest);
+        when(userService.loadUserByEmail(activationRequest.getEmail())).thenReturn(user);
+        Mockito.doNothing().when(userMessageService).notifyFirstTimeLogin(any());
+        deviceRegistrationResource.activation(body);
+        verify(userMessageService, times(1)).notifyFirstTimeLogin(any());
+    }
+
+    @Test
+    public void shouldSendDeviceToken() {
+        String body = TestData.getUserRequest();
+        when(marshaller.unmarshalLenient(body, DeviceRegistrationInfo.class)).thenReturn(deviceToken);
+        when(userService.loadUserByEmail(deviceToken.getEmail())).thenReturn(user);
+        Mockito.doNothing().when(userMessageService).sendDeviceRegToken(anyString(), anyString(), anyString(), anyString());
+        deviceRegistrationResource.userRequest(body);
+        verify(userMessageService, times(1)).sendDeviceRegToken(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    public void shouldSendPasswordToken() {
+        String body = TestData.getUserRequest();
+        when(marshaller.unmarshalLenient(body, DeviceRegistrationInfo.class)).thenReturn(passwordResetRequest);
+        when(userService.loadUserByEmail(passwordResetRequest.getEmail())).thenReturn(user);
+        Mockito.doNothing().when(userMessageService).sendPasswordResetToken(anyString(), anyString(), anyString(), anyString());
+        deviceRegistrationResource.userRequest(body);
+        verify(userMessageService, times(1)).sendPasswordResetToken(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    public void shouldDeviceUnRegUserNotification() {
+        String body = TestData.getUserRequest();
+        when(marshaller.unmarshalLenient(body, DeviceRegistrationInfo.class)).thenReturn(deviceTokenUnRegUserRequest);
+        Mockito.doNothing().when(userMessageService).notifyDeviceRegInfo(any());
+        deviceRegistrationResource.userRequest(body);
+        verify(userMessageService, times(1)).notifyDeviceRegInfo(any());
+    }
+
+    @Test
+    public void shouldPasswordResetUnRegUserNotification() {
+        String body = TestData.getUserRequest();
+        when(marshaller.unmarshalLenient(body, DeviceRegistrationInfo.class)).thenReturn(passwordResetUnRegUserRequest);
+        Mockito.doNothing().when(userMessageService).notifyPasswordResetInfo(any());
+        deviceRegistrationResource.userRequest(body);
+        verify(userMessageService, times(1)).notifyPasswordResetInfo(anyMap());
+    }
+
+    @Test
+    public void shouldReturnRegToken() {
+        String body = "getRegToken";
+        Map<String, Object> value = new HashMap<>();
+        when(marshaller.unmarshalLenient(body, TokenRequest.class)).thenReturn(tokenRequest);
+        when(userService.loadUserById(anyString())).thenReturn(user);
+        when(userMessageService.getToken(anyString(), anyString(), anyString())).thenReturn("token");
+        deviceRegistrationResource.registrationToken(body);
+        verify(userMessageService, times(1)).getToken(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    public void shouldGenerateVisualCaptcha() throws URISyntaxException {
+        deviceRegistrationResource.initPreconsent();
+        verify(preConsentService, times(1)).generateVisualCaptcha();
+    }
+
+    @Test
+    public void shouldThrowBadRequestExceptionWhenBothRmEmailAndRmNameAreNull() throws URISyntaxException {
+        expectedException.expectMessage("rmName and rmEmail both can not be null");
+        expectedException.expect(BadRequestException.class);
+        String body = "clientSignUp";
+        ClientSignUpForm clientSignUpForm = ClientSignUpForm.builder().rmEmail(null).rmName(null).build();
+        when(marshaller.unmarshalLenient(body, ClientSignUpForm.class)).thenReturn(clientSignUpForm);
+        deviceRegistrationResource.clientSignUpRequest(body);
+        verify(userMessageService, times(1)).notifyClientPreConsent(any());
+    }
+
+    @Test
+    public void validationShouldFailWhenCaptchaAnswerAndEncAnswerDifferent() throws URISyntaxException {
+        String body = "clientSignUp";
+        ClientSignUpForm clientSignUpForm = ClientSignUpForm.builder()
+                .rmEmail("abc")
+                .rmName(null)
+                .encVisualAnswer("andwedw")
+                .captchaAnswer("wdqwd")
+                .build();
+        ClientSignUpResponse clientSignUpResponse = ClientSignUpResponse.builder().transactionSuccess(false).build().addErrorResponse(RpApiConstants.CAPTCHA, "Visual captcha validation failed [wdqwd]");
+        when(marshaller.unmarshalLenient(body, ClientSignUpForm.class)).thenReturn(clientSignUpForm);
+        when(preConsentService.isValid(clientSignUpForm)).thenReturn(true);
+        when(preConsentService.validateAnswer(clientSignUpForm)).thenReturn(clientSignUpResponse);
+        deviceRegistrationResource.clientSignUpRequest(body);
+        verify(userMessageService, times(0)).notifyClientPreConsent(any());
+        verify(preConsentService, times(0)).persistCaptcha(any());
+    }
+
+    @Test
+    public void validationShouldFailWhenCaptchaAnswerIsUsedByAnotherUser() throws URISyntaxException {
+        String body = "clientSignUp";
+        ClientSignUpForm clientSignUpForm = ClientSignUpForm.builder()
+                .rmEmail("abc")
+                .rmName(null)
+                .encVisualAnswer("f132fdfg66656dsg")
+                .captchaAnswer("6bb!88")
+                .build();
+        ClientSignUpResponse clientSignUpResponse = ClientSignUpResponse.builder()
+                .transactionSuccess(false).build()
+                .addErrorResponse(RpApiConstants.CAPTCHA, "Visual answer is already used by another user recently [6bb!88]");
+        when(marshaller.unmarshalLenient(body, ClientSignUpForm.class)).thenReturn(clientSignUpForm);
+        when(preConsentService.isValid(clientSignUpForm)).thenReturn(true);
+        when(preConsentService.validateAnswer(clientSignUpForm)).thenReturn(clientSignUpResponse);
+        deviceRegistrationResource.clientSignUpRequest(body);
+        verify(userMessageService, times(0)).notifyClientPreConsent(any());
+        verify(preConsentService, times(0)).persistCaptcha(any());
+    }
+
+    @Test
+    public void validationShouldPassWhenUserEnterCorrectAnswer() throws URISyntaxException {
+        String body = "clientSignUp";
+        ClientSignUpForm clientSignUpForm = ClientSignUpForm.builder()
+                .rmEmail("abc")
+                .rmName(null)
+                .encVisualAnswer("f132fdfg66656dsg")
+                .captchaAnswer("6bb!88")
+                .build();
+        ClientSignUpResponse clientSignUpResponse = ClientSignUpResponse.builder()
+                .transactionSuccess(true).build();
+        when(marshaller.unmarshalLenient(body, ClientSignUpForm.class)).thenReturn(clientSignUpForm);
+        when(preConsentService.isValid(clientSignUpForm)).thenReturn(true);
+        when(preConsentService.validateAnswer(clientSignUpForm)).thenReturn(clientSignUpResponse);
+        Mockito.doNothing().when(preConsentService).persistCaptcha(anyString());
+        deviceRegistrationResource.clientSignUpRequest(body);
+        verify(userMessageService, times(1)).notifyClientPreConsent(any());
+        verify(preConsentService, times(1)).persistCaptcha(any());
+    }
+}
