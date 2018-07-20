@@ -1,0 +1,58 @@
+package com.scb.channels.research.resource;
+
+import com.scb.channels.research.model.ResourceIdentifier;
+import com.scb.channels.research.service.ContentServiceImpl;
+import com.scb.channels.research.service.client.ContentCacheClient;
+import com.scb.channels.research.utils.TestData;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import javax.ws.rs.BadRequestException;
+
+import static com.scb.channels.research.model.AssetClassEnum.FX;
+import static com.scb.channels.research.utils.RpApiConstants.RP_APPLICATION_ID;
+import static com.scb.channels.research.utils.RpApiConstants.TRADEIDEAS_CATEGORY;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+@RunWith(MockitoJUnitRunner.class)
+public class CollateralResourceImplTest {
+
+    @InjectMocks
+    private ContentServiceImpl contentService;
+
+    @Mock
+    private ContentCacheClient contentCacheClient;
+
+    @Mock
+    private FilterResourceImpl filterResource;
+
+    @InjectMocks
+    private CollateralResourceImpl collateralResource;
+
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
+
+    @Test
+    public void shouldRetrieveTradeIdeas() {
+        ResourceIdentifier identifier = ResourceIdentifier.builder()
+                .subCategory(FX.name())
+                .category(TRADEIDEAS_CATEGORY)
+                .applicationId(RP_APPLICATION_ID)
+                .build();
+
+        when(contentService.tradeIdea("", identifier)).thenReturn(TestData.getTradeFx());
+        assertThat(contentService.tradeIdea("", identifier)).isNotNull();
+    }
+
+    @Test
+    public void shouldReturnBadRequestWhenCountryIdNotFound() {
+        expectedException.expect(BadRequestException.class);
+        collateralResource.getAnalystByCountryId(null, null);
+    }
+}
