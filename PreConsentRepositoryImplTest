@@ -1,0 +1,52 @@
+package com.scb.channels.research.repository;
+
+import com.datastax.driver.core.Row;
+import com.scb.channels.persistence.Loadable;
+import com.scb.channels.persistence.PersistenceService;
+import com.scb.channels.research.model.clientform.VisualCaptcha;
+import com.scb.channels.research.utils.PersistenceMatchers;
+import com.scb.channels.research.utils.TestData;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import java.util.List;
+
+import static org.assertj.core.api.Java6Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.*;
+
+@RunWith(MockitoJUnitRunner.Silent.class)
+public class PreConsentRepositoryImplTest {
+
+    @InjectMocks
+    private PreConsentRepositoryImpl preConsentRepository;
+
+    @Mock
+    private PersistenceService persistenceService;
+
+    @Mock
+    protected Row mockRow;
+
+    private static final String TABLE_RP_CAPTCHA = "rp_captcha";
+    private static final VisualCaptcha mockVisualCaptcha = TestData.getVisualCaptcha();
+
+    @Test
+    public void shouldReturnCaptchaByVisual() {
+        when(persistenceService.retrieve(argThat(PersistenceMatchers.loadsFrom(TABLE_RP_CAPTCHA)))).thenReturn(mockVisualCaptcha);
+        VisualCaptcha visualCaptcha= preConsentRepository.loadCaptchaByVisual("xyz");
+        ArgumentCaptor<Loadable> captor = ArgumentCaptor.forClass(Loadable.class);
+        verify(persistenceService, times(1)).retrieve(captor.capture());
+        List<Loadable> loadables = captor.getAllValues();
+        assertThat(loadables).hasSize(1);
+        mockCompulsoryValues(mockRow);
+        assertThat(visualCaptcha).isEqualTo(mockVisualCaptcha);
+    }
+
+    private void mockCompulsoryValues(Row mockRow){
+        when(mockRow.getString("visualAnswer")).thenReturn(mockVisualCaptcha.getVisualAnswer());
+    }
+}
