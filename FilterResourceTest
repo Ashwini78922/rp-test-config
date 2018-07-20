@@ -1,0 +1,21 @@
+package com.scb.channels.research.resource;
+
+import com.scb.channels.research.utils.TestData;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@RunWith(MockitoJUnitRunner.class)
+public class FilterResourceTest {
+
+    @InjectMocks
+    private FilterResourceImpl filterResource;
+
+    @Test
+    public void should_return_active_tradeideas_for_fx() {
+        assertThat(filterResource.getActiveTradeIdeas(TestData.getTradeFx()).getValue()).hasSize(1);
+    }
+}
