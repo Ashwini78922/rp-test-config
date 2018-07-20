@@ -1,0 +1,69 @@
+package com.scb.channels.research.resource;
+
+
+import com.google.common.collect.ImmutableList;
+import com.scb.channels.foundation.util.jackson.JacksonMarshaller;
+import com.scb.channels.foundation.util.jackson.Marshaller;
+import com.scb.channels.research.resource.model.NotificationInfo;
+import com.scb.channels.research.resource.model.UserNotificationInfo;
+import com.scb.channels.research.service.NotificationService;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import static org.mockito.Mockito.when;
+
+@RunWith(MockitoJUnitRunner.class)
+public class NotificationResourceImplTest {
+
+    @InjectMocks
+    NotificationResourceImpl notificationResource;
+
+    @Mock
+    private Marshaller marshaller;
+
+    @Mock
+    private NotificationService notificationService;
+
+    private String userId;
+    private String reportId;
+
+    private String notificationJason;
+
+    @Before
+    public void setUp() {
+        userId = "10000";
+        reportId = "88887";
+        notificationJason = "{\"reportId\":\"88887\",\"userNotificationInfo\":[{\"userId\":\"10000\",\"codes\":[\"EML\",\"WBS\",\"MBL\"]}]}\n";
+    }
+
+    @Test
+    public void shouldRetrieveNotificationInfo() {
+        NotificationInfo notificationInfo = NotificationInfo.builder()
+                .reportId(reportId)
+                .userNotificationInfo(ImmutableList.of(UserNotificationInfo.builder().userId(userId).build())).build();
+        when(notificationService.getNotificationInfo(reportId)).thenReturn(notificationInfo);
+        when(notificationService.getNotificationInfo(reportId)).thenReturn(notificationInfo);
+        when(marshaller.marshalLenient(notificationInfo)).thenReturn(notificationJason);
+        String json = notificationResource.getNotificationInfo(userId, reportId);
+        NotificationInfo notificationInf = new JacksonMarshaller().unmarshalLenient(json, NotificationInfo.class);
+        Assert.assertEquals(notificationInf.getReportId(), reportId);
+        Assert.assertEquals(notificationInf.getUserNotificationInfo().get(0).getUserId(), userId);
+    }
+
+    @Test
+    public void shouldUpdateNotificationInfo() {
+        NotificationInfo notificationInf = new JacksonMarshaller().unmarshalLenient(notificationJason, NotificationInfo.class);
+        when(marshaller.unmarshalLenient(notificationJason, NotificationInfo.class)).thenReturn(notificationInf);
+        when(notificationService.updateNotificationInfo(notificationInf)).thenReturn(notificationInf);
+        when(marshaller.marshalLenient(notificationInf)).thenReturn(notificationJason);
+        String json = notificationResource.updateNotificationInfo(userId, notificationJason);
+        NotificationInfo notificationInfo = new JacksonMarshaller().unmarshalLenient(json, NotificationInfo.class);
+        Assert.assertEquals(notificationInf.getReportId(), reportId);
+        Assert.assertEquals(notificationInf.getUserNotificationInfo().get(0).getUserId(), userId);
+    }
+}
